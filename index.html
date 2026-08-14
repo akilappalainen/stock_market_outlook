@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Market Return Outlook — 10-year equity &amp; index return model</title>
-<meta name="description" content="Model-based 10-year annualised return estimates for major equity markets and indices, with historical forecast-vs-realised track record." />
+<title>Market Return Outlook — equity &amp; index return model</title>
+<meta name="description" content="Model-based total-return estimates for major equity markets and indices, with historical price and dividend levels." />
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,8 +21,8 @@
       <p class="brand-title">Return Outlook</p>
     </div>
     <nav class="site-nav">
-      <a href="#outlook">Outlook</a>
-      <a href="#history">Track record</a>
+      <a href="#curve">Return curve</a>
+      <a href="#levels">Price &amp; dividends</a>
       <a href="#methodology">Methodology</a>
     </nav>
   </div>
@@ -30,127 +30,129 @@
 
 <main>
 
-  <!-- ============================ HERO / SECTION A ============================ -->
-  <section id="outlook">
-    <div class="wrap hero">
-      <h1>Where does the next decade of returns look strongest?</h1>
-      <p class="lede">
-        Annualised total-return estimates for holding periods of 2 to 10 years, produced by a
-        regression-based return model. Compare markets, then use the legend below the chart to
-        isolate the ones you care about.
-      </p>
-      <div class="snapshot-chip">
-        <span class="snapshot-dot"></span>
-        Snapshot as of <strong id="outlookSnapshotDate">–</strong>
-      </div>
+  <div class="wrap intro">
+    <p class="intro-text">
+      Annualised total-return estimates and historical price / dividend levels for major
+      indices and national equity markets, produced by a regression-based forecasting model.
+    </p>
+    <div class="disclaimer">
+      <span class="mark">Note —</span>
+      <span>
+        This page presents statistical model output for general information. It is not
+        investment advice or a recommendation to buy, sell or hold any security. Past accuracy
+        does not guarantee future results, and investing involves risk of loss.
+      </span>
     </div>
+  </div>
 
+  <!-- ============================ CHART 1 ============================ -->
+  <section id="curve">
     <div class="wrap">
       <div class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="section-eyebrow">Chart 1 — return by holding period</p>
+            <h2 class="section-title">Forecasted total return curve of stock markets</h2>
+            <p class="section-lede">
+              Estimated annualised total return for holding periods of 2 to 10 years, as of the
+              model's latest snapshot. Use the legend to isolate individual markets.
+            </p>
+          </div>
+          <div class="snapshot-chip">
+            <span class="snapshot-dot"></span>
+            Snapshot <strong id="curveSnapshotDate">–</strong>
+          </div>
+        </div>
+
         <div class="controls-row">
           <div class="control-group">
             <span class="control-label">Market group</span>
-            <div class="segmented" id="outlookToggle">
-              <button data-value="equity" class="active">Equities by country</button>
-              <button data-value="indices">Indices</button>
+            <div class="segmented" id="curveGroupToggle">
+              <button data-value="indices" class="active">Indices</button>
+              <button data-value="equity">Equities by country</button>
             </div>
           </div>
         </div>
 
         <div class="chart-holder">
-          <canvas id="outlookCanvas"></canvas>
+          <canvas id="curveCanvas"></canvas>
         </div>
-        <div class="legend" id="outlookLegend"></div>
+        <div class="legend" id="curveLegend"></div>
 
         <div class="chart-caption">
           <span>X-axis: holding period in years from today. Y-axis: estimated annualised total return.</span>
         </div>
       </div>
-
-      <div style="height:22px"></div>
-
-      <div class="disclaimer">
-        <span class="mark">Note —</span>
-        <span>
-          These are outputs of a statistical model, not investment advice or a recommendation to
-          buy, sell or hold any security. Past accuracy (see the track record below) does not
-          guarantee future results. Markets can lose value. If in doubt, speak to a licensed
-          financial advisor before acting on this information.
-        </span>
-      </div>
     </div>
   </section>
 
-  <hr class="rule" />
-
-  <!-- ============================ SECTION B: HISTORY ============================ -->
-  <section id="history">
+  <!-- ============================ CHART 2 ============================ -->
+  <section id="levels">
     <div class="wrap">
-      <p class="section-eyebrow">Forecast vs. reality</p>
-      <h2 class="section-title">How well has the model tracked what actually happened?</h2>
-      <p class="section-lede">
-        For one market at a time: the return the model forecast at each point in history for a
-        given holding period, laid next to the return that market actually went on to deliver over
-        the following years. Where the realised line stops, there simply hasn't been enough time
-        yet for that horizon to complete — the forecast line continues into the future.
-      </p>
-
       <div class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="section-eyebrow">Chart 2 — price and dividend history</p>
+            <h2 class="section-title">Forecasted price or dividends of stock markets</h2>
+            <p class="section-lede">
+              For one market at a time: the model's forecast next to what actually happened,
+              shown either as the price index level or the dividend level — never as a rate of
+              change. The chart opens where the model's forecast range begins; widen it with the
+              date pickers or the "Full history" shortcut.
+            </p>
+          </div>
+          <span class="series-badge" id="levelBadge">Showing: price index</span>
+        </div>
+
         <div class="controls-row">
           <div class="control-group">
             <span class="control-label">Market group</span>
-            <div class="segmented" id="historyAssetClassToggle">
-              <button data-value="equity" class="active">Equities by country</button>
-              <button data-value="indices">Indices</button>
+            <div class="segmented" id="levelGroupToggle">
+              <button data-value="indices" class="active">Indices</button>
+              <button data-value="equity">Equities by country</button>
             </div>
           </div>
 
           <div class="control-group">
             <span class="control-label">Market</span>
-            <select id="assetSelect"></select>
+            <select id="levelAssetSelect"></select>
           </div>
 
           <div class="control-group">
-            <span class="control-label">Return type</span>
-            <div class="switch-row">
-              <button class="switch" id="dividendSwitch" aria-pressed="false" aria-label="Include dividends"></button>
-              <span class="switch-label">Include dividends (total return)</span>
-            </div>
-          </div>
-
-          <div class="control-group ruler-wrap" id="rulerWrap">
-            <span class="control-label">Holding period</span>
-            <div class="ruler">
-              <div class="ruler-readout"><strong id="horizonReadout">6</strong> years</div>
-              <input type="range" class="ruler-input" id="horizonRuler" min="2" max="10" step="1" value="6" list="rulerTicks" />
-              <datalist id="rulerTicks">
-                <option value="2"></option><option value="3"></option><option value="4"></option>
-                <option value="5"></option><option value="6"></option><option value="7"></option>
-                <option value="8"></option><option value="9"></option><option value="10"></option>
-              </datalist>
-              <div class="ruler-ticks">
-                <span>2y</span><span>3y</span><span>4y</span><span>5y</span><span>6y</span>
-                <span>7y</span><span>8y</span><span>9y</span><span>10y</span>
-              </div>
+            <span class="control-label">Series</span>
+            <div class="segmented" id="levelSeriesToggle">
+              <button data-value="price" class="active">Price index</button>
+              <button data-value="dividend">Dividends</button>
             </div>
           </div>
         </div>
 
-        <div class="tabs" id="historyTabs">
-          <button data-value="return" class="active">Return accuracy</button>
-          <button data-value="level">Index level</button>
+        <div class="controls-row range-row">
+          <div class="control-group">
+            <span class="control-label">From</span>
+            <input type="date" id="rangeFrom" />
+          </div>
+          <div class="control-group">
+            <span class="control-label">To</span>
+            <input type="date" id="rangeTo" />
+          </div>
+          <div class="control-group">
+            <span class="control-label">Shortcuts</span>
+            <div class="preset-row">
+              <button class="range-preset" data-preset="forecast">Since forecast begins</button>
+              <button class="range-preset" data-preset="full">Full history</button>
+            </div>
+          </div>
         </div>
 
         <div class="chart-holder tall">
-          <canvas id="historyCanvas"></canvas>
+          <canvas id="levelCanvas"></canvas>
         </div>
 
-        <div class="chart-caption" id="historyCaption"></div>
+        <div class="chart-caption" id="levelCaption"></div>
       </div>
     </div>
   </section>
-
-  <hr class="rule" />
 
   <!-- ============================ METHODOLOGY ============================ -->
   <section id="methodology">
@@ -158,12 +160,10 @@
       <p class="section-eyebrow">Methodology</p>
       <h2 class="section-title">What am I looking at?</h2>
       <p class="section-lede" style="max-width:760px">
-        The return estimates come from a regression-based forecasting model applied to historical
-        index and equity-market data, expressed as annualised total return over holding periods of
-        2–10 years. "Realised" figures are the return a market actually delivered once that many
-        years had passed; "forecast" figures are the model's estimate made at that point in time.
-        Comparing the two over history is a way of judging how much weight the current, still-open
-        forecasts deserve — it is not a guarantee that the pattern will repeat.
+        Chart 1 shows what the model currently expects for annualised total return at each
+        holding period. Chart 2 puts that same model's price or dividend forecast next to what a
+        market actually delivered historically, so the current forecast can be judged in context
+        — it is not a guarantee that the pattern will repeat.
       </p>
     </div>
   </section>
@@ -174,17 +174,12 @@
   <div class="wrap">
     <div class="foot-grid">
       <div>
-        <h3>Data sources (updated periodically)</h3>
-        <ul>
-          <li>Estimated_annualized_total_return_of_equity.txt</li>
-          <li>Estimated_annualized_total_return_of_indices.txt</li>
-          <li>FData_Equity.txt / FData_DIC_Dividend.txt</li>
-          <li>FData.txt / FData_Index_Dividend.txt</li>
-        </ul>
+        <h3>About</h3>
+        <p style="margin:0">Add a short line here about who produces this model and how often it's refreshed.</p>
       </div>
       <div>
-        <h3>About</h3>
-        <p style="margin:0 0 10px">Add a short line here about who produces this model and how often it's refreshed.</p>
+        <h3>Data &amp; methodology</h3>
+        <p style="margin:0">Underlying data comes from public market sources; the return, price and dividend estimates shown here are produced by a mathematical forecasting model.</p>
       </div>
     </div>
     <div class="fine">

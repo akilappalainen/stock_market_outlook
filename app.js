@@ -7,12 +7,12 @@
    ========================================================================== */
 
 const FILES = {
-  summaryEquity: "data/Estimated_annualized_total_return_of_equity.txt",
   summaryIndices: "data/Estimated_annualized_total_return_of_indices.txt",
-  historyEquity: "data/FData_Equity.txt",
-  historyEquityDiv: "data/FData_DIC_Dividend.txt",
-  historyIndex: "data/FData.txt",
-  historyIndexDiv: "data/FData_Index_Dividend.txt",
+  summaryEquity: "data/Estimated_annualized_total_return_of_equity.txt",
+  priceIndex: "data/FData.txt",
+  priceEquity: "data/FData_Equity.txt",
+  dividendIndex: "data/FData_Index_Dividend.txt",
+  dividendEquity: "data/FData_DIC_Dividend.txt",
 };
 
 // Friendly display names for asset codes that are abbreviations.
@@ -146,16 +146,12 @@ function baseScales(yTickFormatter) {
   return {
     x: {
       grid: { color: GRID_COLOR, drawTicks: false },
-      ticks: { color: AXIS_COLOR, font: { family: FONT_MONO, size: 11 }, autoSkip: true, maxTicksLimit: 12, maxRotation: 0 },
+      ticks: { color: AXIS_COLOR, font: { family: FONT_MONO, size: 11 }, autoSkip: true, maxTicksLimit: 10, maxRotation: 0 },
       border: { color: GRID_COLOR },
     },
     y: {
       grid: { color: GRID_COLOR, drawTicks: false },
-      ticks: {
-        color: AXIS_COLOR,
-        font: { family: FONT_MONO, size: 11 },
-        callback: yTickFormatter,
-      },
+      ticks: { color: AXIS_COLOR, font: { family: FONT_MONO, size: 11 }, callback: yTickFormatter },
       border: { display: false },
     },
   };
@@ -170,46 +166,53 @@ function baseTooltip(valueFormatter) {
     cornerRadius: 6,
     displayColors: true,
     callbacks: {
-      label: (ctx) => {
-        const v = ctx.parsed.y;
-        return ` ${ctx.dataset.label}: ${valueFormatter(v)}`;
-      },
+      label: (ctx) => ` ${ctx.dataset.label}: ${valueFormatter(ctx.parsed.y)}`,
     },
   };
 }
 
-/* ============================ SECTION A: OUTLOOK ========================== */
-
-const outlookState = { assetClass: "equity", hiddenAssets: new Set() };
-let outlookChart = null;
-let outlookData = { equity: null, indices: null };
-
-async function initOutlook() {
-  const [eq, idx] = await Promise.all([loadTable(FILES.summaryEquity), loadTable(FILES.summaryIndices)]);
-  outlookData.equity = eq;
-  outlookData.indices = idx;
-  document.querySelectorAll("#outlookToggle button").forEach((btn) => {
+function wireSegmented(containerId, onChange) {
+  const buttons = document.querySelectorAll(`#${containerId} button`);
+  buttons.forEach((btn) => {
     btn.addEventListener("click", () => {
-      outlookState.assetClass = btn.dataset.value;
-      outlookState.hiddenAssets = new Set();
-      document.querySelectorAll("#outlookToggle button").forEach((b) => b.classList.toggle("active", b === btn));
-      renderOutlook();
+      buttons.forEach((b) => b.classList.toggle("active", b === btn));
+      onChange(btn.dataset.value);
     });
   });
-  renderOutlook();
 }
 
-function renderOutlook() {
-  const table = outlookState.assetClass === "equity" ? outlookData.equity : outlookData.indices;
+/* ========================= CHART 1: RETURN CURVE ========================== */
+/* "Forecasted total return curve of stock markets"                          */
+
+const curveState = { group: "indices", hidden: new Set() };
+let curveChart = null;
+let curveData = { indices: null, equity: null };
+
+async function initCurve() {
+  const [idx, eq] = await Promise.all([loadTable(FILES.summaryIndices), loadTable(FILES.summaryEquity)]);
+  curveData.indices = idx;
+  curveData.equity = eq;
+
+  wireSegmented("curveGroupToggle", (val) => {
+    curveState.group = val;
+    curveState.hidden = new Set();
+    renderCurve();
+  });
+
+  renderCurve();
+}
+
+function renderCurve() {
+  const table = curveState.group === "indices" ? curveData.indices : curveData.equity;
   const assets = table.headers.filter((h) => h !== "Horizon" && h !== "Date");
   const horizons = table.rows.map((r) => r.Horizon);
   const snapshotDate = table.rows[0] ? table.rows[0].Date : null;
 
-  document.getElementById("outlookSnapshotDate").textContent = fmtDate(snapshotDate);
+  document.getElementById("curveSnapshotDate").textContent = fmtDate(snapshotDate);
 
   const datasets = assets.map((asset, i) => ({
     label: displayName(asset),
-    data: table.rows.map((r) => (r[asset] === null ? null : r[asset])),
+    data: table.rows.map((r) => r[asset]),
     borderColor: colorFor(i),
     backgroundColor: colorFor(i),
     borderWidth: 2,
@@ -217,28 +220,24 @@ function renderOutlook() {
     pointHoverRadius: 5,
     tension: 0.25,
     spanGaps: true,
-    hidden: outlookState.hiddenAssets.has(asset),
-    _asset: asset,
+    hidden: curveState.hidden.has(asset),
   }));
 
-  const ctx = document.getElementById("outlookCanvas").getContext("2d");
-  if (outlookChart) outlookChart.destroy();
-  outlookChart = new Chart(ctx, {
+  const ctx = document.getElementById("curveCanvas").getContext("2d");
+  if (curveChart) curveChart.destroy();
+  curveChart = new Chart(ctx, {
     type: "line",
     data: { labels: horizons.map((h) => `${h}y`), datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: baseTooltip(fmtPct),
-      },
+      plugins: { legend: { display: false }, tooltip: baseTooltip(fmtPct) },
       scales: baseScales((v) => fmtPct(v)),
     },
   });
 
-  renderLegend("outlookLegend", assets, outlookState.hiddenAssets, () => renderOutlook(), () => outlookChart);
+  renderLegend("curveLegend", assets, curveState.hidden, renderCurve);
 }
 
 function renderLegend(containerId, assets, hiddenSet, onToggle) {
@@ -258,82 +257,83 @@ function renderLegend(containerId, assets, hiddenSet, onToggle) {
   });
 }
 
-/* ========================= SECTION B: TRACK RECORD ========================= */
+/* ===================== CHART 2: PRICE / DIVIDEND LEVELS ==================== */
+/* "Forecasted price or dividends of stock markets"                          */
 
-const historyState = {
-  assetClass: "equity", // 'equity' | 'indices'
-  dividend: false,
+const levelState = {
+  group: "indices", // 'indices' | 'equity'
+  series: "price", // 'price' | 'dividend'
   asset: null,
-  horizon: 6,
-  view: "return", // 'return' | 'level'
+  from: null,
+  to: null,
 };
 
-let historyTables = { equity: null, equityDiv: null, indices: null, indicesDiv: null };
-let historyChart = null;
+let levelTables = { priceIndex: null, priceEquity: null, dividendIndex: null, dividendEquity: null };
+let levelChart = null;
 
-async function initHistory() {
-  const [eq, eqDiv, idx, idxDiv] = await Promise.all([
-    loadTable(FILES.historyEquity),
-    loadTable(FILES.historyEquityDiv),
-    loadTable(FILES.historyIndex),
-    loadTable(FILES.historyIndexDiv),
+async function initLevel() {
+  const [pIdx, pEq, dIdx, dEq] = await Promise.all([
+    loadTable(FILES.priceIndex),
+    loadTable(FILES.priceEquity),
+    loadTable(FILES.dividendIndex),
+    loadTable(FILES.dividendEquity),
   ]);
-  historyTables = { equity: eq, equityDiv: eqDiv, indices: idx, indicesDiv: idxDiv };
+  levelTables = { priceIndex: pIdx, priceEquity: pEq, dividendIndex: dIdx, dividendEquity: dEq };
 
-  document.querySelectorAll("#historyAssetClassToggle button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      historyState.assetClass = btn.dataset.value;
-      document.querySelectorAll("#historyAssetClassToggle button").forEach((b) => b.classList.toggle("active", b === btn));
-      refreshAssetDropdown();
-      renderHistory();
-    });
-  });
-
-  const divSwitch = document.getElementById("dividendSwitch");
-  divSwitch.addEventListener("click", () => {
-    historyState.dividend = !historyState.dividend;
-    divSwitch.classList.toggle("on", historyState.dividend);
+  wireSegmented("levelGroupToggle", (val) => {
+    levelState.group = val;
     refreshAssetDropdown();
-    renderHistory();
+    resetRangeToDefault();
+    renderLevel();
   });
 
-  document.getElementById("assetSelect").addEventListener("change", (e) => {
-    historyState.asset = e.target.value;
-    renderHistory();
+  wireSegmented("levelSeriesToggle", (val) => {
+    levelState.series = val;
+    refreshAssetDropdown();
+    resetRangeToDefault();
+    renderLevel();
   });
 
-  const ruler = document.getElementById("horizonRuler");
-  ruler.addEventListener("input", (e) => {
-    historyState.horizon = parseInt(e.target.value, 10);
-    document.getElementById("horizonReadout").textContent = historyState.horizon;
-    renderHistory();
+  document.getElementById("levelAssetSelect").addEventListener("change", (e) => {
+    levelState.asset = e.target.value;
+    resetRangeToDefault();
+    renderLevel();
   });
 
-  document.querySelectorAll("#historyTabs button").forEach((btn) => {
+  document.getElementById("rangeFrom").addEventListener("change", (e) => {
+    levelState.from = e.target.value;
+    renderLevel();
+  });
+  document.getElementById("rangeTo").addEventListener("change", (e) => {
+    levelState.to = e.target.value;
+    renderLevel();
+  });
+
+  document.querySelectorAll(".range-preset").forEach((btn) => {
     btn.addEventListener("click", () => {
-      historyState.view = btn.dataset.value;
-      document.querySelectorAll("#historyTabs button").forEach((b) => b.classList.toggle("active", b === btn));
-      document.getElementById("rulerWrap").style.display = historyState.view === "return" ? "" : "none";
-      renderHistory();
+      if (btn.dataset.preset === "forecast") resetRangeToDefault();
+      else if (btn.dataset.preset === "full") setRangeToFull();
+      renderLevel();
     });
   });
 
   refreshAssetDropdown();
-  renderHistory();
+  resetRangeToDefault();
+  renderLevel();
 }
 
-function currentHistoryTable() {
-  if (historyState.assetClass === "equity") {
-    return historyState.dividend ? historyTables.equityDiv : historyTables.equity;
+function currentLevelTable() {
+  if (levelState.group === "indices") {
+    return levelState.series === "price" ? levelTables.priceIndex : levelTables.dividendIndex;
   }
-  return historyState.dividend ? historyTables.indicesDiv : historyTables.indices;
+  return levelState.series === "price" ? levelTables.priceEquity : levelTables.dividendEquity;
 }
 
 function refreshAssetDropdown() {
-  const table = currentHistoryTable();
+  const table = currentLevelTable();
   const assets = dedupedAssetNames(groupByAsset(table.headers));
-  const select = document.getElementById("assetSelect");
-  const previous = historyState.asset;
+  const select = document.getElementById("levelAssetSelect");
+  const previous = levelState.asset;
   select.innerHTML = "";
   assets.forEach((asset) => {
     const opt = document.createElement("option");
@@ -341,102 +341,109 @@ function refreshAssetDropdown() {
     opt.textContent = displayName(asset);
     select.appendChild(opt);
   });
-  historyState.asset = assets.includes(previous) ? previous : assets[0];
-  select.value = historyState.asset;
+  levelState.asset = assets.includes(previous) ? previous : assets[0];
+  select.value = levelState.asset;
 }
 
-function renderHistory() {
-  const table = currentHistoryTable();
-  const assets = groupByAsset(table.headers);
-  const cols = assets[historyState.asset];
+// First row where the model has *any* forward-looking figure for this asset.
+function forecastStartIndex(rows, cols) {
+  return rows.findIndex(
+    (r) => r[cols.forecasted_value] !== null || r[cols.plus_stdev] !== null || r[cols.minus_stdev] !== null
+  );
+}
+
+function resetRangeToDefault() {
+  const table = currentLevelTable();
+  const cols = groupByAsset(table.headers)[levelState.asset];
+  if (!cols) return;
+  const startIdx = forecastStartIndex(table.rows, cols);
+  const fromRow = startIdx === -1 ? table.rows[0] : table.rows[startIdx];
+  levelState.from = fromRow.Date;
+  levelState.to = table.rows[table.rows.length - 1].Date;
+  syncRangeInputs();
+}
+
+function setRangeToFull() {
+  const table = currentLevelTable();
+  levelState.from = table.rows[0].Date;
+  levelState.to = table.rows[table.rows.length - 1].Date;
+  syncRangeInputs();
+}
+
+function syncRangeInputs() {
+  const table = currentLevelTable();
+  const min = table.rows[0].Date;
+  const max = table.rows[table.rows.length - 1].Date;
+  const fromInput = document.getElementById("rangeFrom");
+  const toInput = document.getElementById("rangeTo");
+  fromInput.min = min;
+  fromInput.max = max;
+  toInput.min = min;
+  toInput.max = max;
+  fromInput.value = levelState.from;
+  toInput.value = levelState.to;
+}
+
+function renderLevel() {
+  const table = currentLevelTable();
+  const cols = groupByAsset(table.headers)[levelState.asset];
   if (!cols) return;
 
-  const dates = table.rows.map((r) => r.Date);
-  let datasets = [];
-  let yFormatter = fmtPct;
+  const rows = table.rows.filter((r) => r.Date >= levelState.from && r.Date <= levelState.to);
+  const dates = rows.map((r) => r.Date);
+  const seriesWord = levelState.series === "price" ? "price index" : "dividend level";
 
-  if (historyState.view === "return") {
-    const h = historyState.horizon;
-    const fCol = cols[`forecasted_${h}year_return`];
-    const rCol = cols[`realized_${h}year_return`];
-    datasets = [
-      {
-        label: `Model forecast (${h}y annualised)`,
-        data: table.rows.map((r) => r[fCol]),
-        borderColor: "#b8801f",
-        backgroundColor: "#b8801f",
-        borderDash: [5, 3],
-        borderWidth: 2,
-        pointRadius: 0,
-        tension: 0.15,
-        spanGaps: true,
-      },
-      {
-        label: `Actually realised (${h}y annualised)`,
-        data: table.rows.map((r) => r[rCol]),
-        borderColor: "#146452",
-        backgroundColor: "#146452",
-        borderWidth: 2,
-        pointRadius: 0,
-        tension: 0.15,
-        spanGaps: true,
-      },
-    ];
-    yFormatter = fmtPct;
-  } else {
-    datasets = [
-      {
-        label: "Lower estimate (-1 st.dev.)",
-        data: table.rows.map((r) => r[cols.minus_stdev]),
-        borderColor: "rgba(91,107,118,0.35)",
-        backgroundColor: "rgba(91,107,118,0.08)",
-        borderWidth: 1,
-        pointRadius: 0,
-        fill: false,
-        tension: 0.15,
-        spanGaps: true,
-      },
-      {
-        label: "Upper estimate (+1 st.dev.)",
-        data: table.rows.map((r) => r[cols.plus_stdev]),
-        borderColor: "rgba(91,107,118,0.35)",
-        backgroundColor: "rgba(91,107,118,0.08)",
-        borderWidth: 1,
-        pointRadius: 0,
-        fill: "-1",
-        tension: 0.15,
-        spanGaps: true,
-      },
-      {
-        label: "Model value (forecast)",
-        data: table.rows.map((r) => r[cols.forecasted_value]),
-        borderColor: "#b8801f",
-        backgroundColor: "#b8801f",
-        borderDash: [5, 3],
-        borderWidth: 2,
-        pointRadius: 0,
-        fill: false,
-        tension: 0.15,
-        spanGaps: true,
-      },
-      {
-        label: "Realised value",
-        data: table.rows.map((r) => r[cols.realized_value]),
-        borderColor: "#146452",
-        backgroundColor: "#146452",
-        borderWidth: 2,
-        pointRadius: 0,
-        fill: false,
-        tension: 0.15,
-        spanGaps: true,
-      },
-    ];
-    yFormatter = fmtCompact;
-  }
+  const datasets = [
+    {
+      label: "Lower estimate (-1 st.dev.)",
+      data: rows.map((r) => r[cols.minus_stdev]),
+      borderColor: "rgba(91,107,118,0.35)",
+      backgroundColor: "rgba(91,107,118,0.08)",
+      borderWidth: 1,
+      pointRadius: 0,
+      fill: false,
+      tension: 0.15,
+      spanGaps: true,
+    },
+    {
+      label: "Upper estimate (+1 st.dev.)",
+      data: rows.map((r) => r[cols.plus_stdev]),
+      borderColor: "rgba(91,107,118,0.35)",
+      backgroundColor: "rgba(91,107,118,0.08)",
+      borderWidth: 1,
+      pointRadius: 0,
+      fill: "-1",
+      tension: 0.15,
+      spanGaps: true,
+    },
+    {
+      label: `Forecast (${seriesWord})`,
+      data: rows.map((r) => r[cols.forecasted_value]),
+      borderColor: "#b8801f",
+      backgroundColor: "#b8801f",
+      borderDash: [5, 3],
+      borderWidth: 2,
+      pointRadius: 0,
+      fill: false,
+      tension: 0.15,
+      spanGaps: true,
+    },
+    {
+      label: `Realised (${seriesWord})`,
+      data: rows.map((r) => r[cols.realized_value]),
+      borderColor: "#146452",
+      backgroundColor: "#146452",
+      borderWidth: 2,
+      pointRadius: 0,
+      fill: false,
+      tension: 0.15,
+      spanGaps: true,
+    },
+  ];
 
-  const ctx = document.getElementById("historyCanvas").getContext("2d");
-  if (historyChart) historyChart.destroy();
-  historyChart = new Chart(ctx, {
+  const ctx = document.getElementById("levelCanvas").getContext("2d");
+  if (levelChart) levelChart.destroy();
+  levelChart = new Chart(ctx, {
     type: "line",
     data: { labels: dates, datasets },
     options: {
@@ -448,28 +455,34 @@ function renderHistory() {
           display: true,
           position: "top",
           align: "start",
-          labels: { color: AXIS_COLOR, font: { family: FONT_SANS, size: 12.5 }, boxWidth: 14, boxHeight: 8, usePointStyle: false, filter: (item) => !item.text.includes("estimate") },
+          labels: {
+            color: AXIS_COLOR,
+            font: { family: FONT_SANS, size: 12.5 },
+            boxWidth: 14,
+            boxHeight: 8,
+            filter: (item) => !item.text.includes("estimate"),
+          },
         },
-        tooltip: baseTooltip(yFormatter),
+        tooltip: baseTooltip(fmtCompact),
       },
-      scales: baseScales((v) => yFormatter(v)),
+      scales: baseScales((v) => fmtCompact(v)),
     },
   });
 
-  // caption
-  const withF = table.rows.filter((r) => r[cols.forecasted_value] !== null);
-  const withR = table.rows.filter((r) => r[cols.realized_value] !== null);
-  const caption = document.getElementById("historyCaption");
-  const fRange = withF.length ? `${fmtDate(withF[0].Date)} – ${fmtDate(withF[withF.length - 1].Date)}` : "n/a";
-  const rRange = withR.length ? `${fmtDate(withR[0].Date)} – ${fmtDate(withR[withR.length - 1].Date)}` : "n/a";
-  caption.innerHTML = `<span>Model forecast span: ${fRange}</span><span>Realised data span: ${rRange}</span>`;
+  // clearly mark which series is showing, and the visible date span
+  const badge = document.getElementById("levelBadge");
+  badge.textContent = levelState.series === "price" ? "Showing: price index (excl. dividends)" : "Showing: dividend level";
+  badge.className = "series-badge " + (levelState.series === "price" ? "badge-price" : "badge-dividend");
+
+  const caption = document.getElementById("levelCaption");
+  caption.innerHTML = `<span>Showing ${fmtDate(levelState.from)} – ${fmtDate(levelState.to)}</span><span>Full data available from ${fmtDate(table.rows[0].Date)} to ${fmtDate(table.rows[table.rows.length - 1].Date)}</span>`;
 }
 
 /* --------------------------------- init ---------------------------------- */
 
 document.addEventListener("DOMContentLoaded", () => {
-  initOutlook().catch((err) => showLoadError(err));
-  initHistory().catch((err) => showLoadError(err));
+  initCurve().catch(showLoadError);
+  initLevel().catch(showLoadError);
 });
 
 function showLoadError(err) {
