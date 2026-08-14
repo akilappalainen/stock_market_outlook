@@ -21,7 +21,7 @@ const DISPLAY_NAMES = {
   HDAX: "HDAX (Germany)",
   Stoxx600: "Stoxx 600 (Europe)",
   Russell3000: "Russell 3000 (USA)",
-  CAC: "CAC 40 (France)",
+  CAC: "CAC (France)",
   FTSE: "FTSE (UK)",
   AEX: "AEX (Netherlands)",
   OMXS: "OMXS (Sweden)",
@@ -171,6 +171,27 @@ function baseTooltip(valueFormatter) {
   };
 }
 
+// Draws a solid horizontal line at y=0 so it's obvious which curves sit
+// above vs below break-even.
+const zeroLinePlugin = {
+  id: "zeroLine",
+  afterDraw(chart) {
+    const { ctx, chartArea, scales } = chart;
+    const y = scales.y;
+    if (!y) return;
+    const yZero = y.getPixelForValue(0);
+    if (yZero < chartArea.top || yZero > chartArea.bottom) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(chartArea.left, yZero);
+    ctx.lineTo(chartArea.right, yZero);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#2b3540";
+    ctx.stroke();
+    ctx.restore();
+  },
+};
+
 function wireSegmented(containerId, onChange) {
   const buttons = document.querySelectorAll(`#${containerId} button`);
   buttons.forEach((btn) => {
@@ -181,10 +202,53 @@ function wireSegmented(containerId, onChange) {
   });
 }
 
+/* ------------------------------- fullscreen -------------------------------- */
+
+function toggleFullscreen(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const isFs = el.classList.toggle("is-fullscreen");
+  document.body.classList.toggle("fs-lock", isFs);
+  const btn = el.querySelector(".expand-btn");
+  if (btn) {
+    btn.textContent = isFs ? "✕" : "⤢";
+    btn.setAttribute("aria-label", isFs ? "Exit fullscreen" : "Expand to fullscreen");
+  }
+  resizeLiveCharts();
+}
+
+function exitAllFullscreen() {
+  document.querySelectorAll(".is-fullscreen").forEach((el) => {
+    el.classList.remove("is-fullscreen");
+    const btn = el.querySelector(".expand-btn");
+    if (btn) {
+      btn.textContent = "⤢";
+      btn.setAttribute("aria-label", "Expand to fullscreen");
+    }
+  });
+  document.body.classList.remove("fs-lock");
+  resizeLiveCharts();
+}
+
+function resizeLiveCharts() {
+  requestAnimationFrame(() => {
+    if (curveChart) curveChart.resize();
+    if (levelChart) levelChart.resize();
+  });
+  setTimeout(() => {
+    if (curveChart) curveChart.resize();
+    if (levelChart) levelChart.resize();
+  }, 150);
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") exitAllFullscreen();
+});
+
 /* ========================= CHART 1: RETURN CURVE ========================== */
 /* "Forecasted total return curve of stock markets"                          */
 
-const curveState = { group: "indices", hidden: new Set() };
+const curveState = { group: "indices", isolated: null, view: "chart" };
 let curveChart = null;
 let curveData = { indices: null, equity: null };
 
@@ -195,9 +259,16 @@ async function initCurve() {
 
   wireSegmented("curveGroupToggle", (val) => {
     curveState.group = val;
-    curveState.hidden = new Set();
+    curveState.isolated = null;
     renderCurve();
   });
+
+  wireSegmented("curveViewToggle", (val) => {
+    curveState.view = val;
+    renderCurve();
+  });
+
+  document.getElementById("curveExpandBtn").addEventListener("click", () => toggleFullscreen("curveVisual"));
 
   renderCurve();
 }
@@ -210,60 +281,121 @@ function renderCurve() {
 
   document.getElementById("curveSnapshotDate").textContent = fmtDate(snapshotDate);
 
-  const datasets = assets.map((asset, i) => ({
-    label: displayName(asset),
-    data: table.rows.map((r) => r[asset]),
-    borderColor: colorFor(i),
-    backgroundColor: colorFor(i),
-    borderWidth: 2,
-    pointRadius: 3,
-    pointHoverRadius: 5,
-    tension: 0.25,
-    spanGaps: true,
-    hidden: curveState.hidden.has(asset),
-  }));
+  const isChartView = curveState.view === "chart";
+  document.getElementById("curveChartHolder").style.display = isChartView ? "" : "none";
+  document.getElementById("curveLegendWrap").style.display = isChartView ? "" : "none";
+  document.getElementById("curveCaption").style.display = isChartView ? "" : "none";
+  document.getElementById("curveTableHolder").style.display = isChartView ? "none" : "";
 
-  const ctx = document.getElementById("curveCanvas").getContext("2d");
-  if (curveChart) curveChart.destroy();
-  curveChart = new Chart(ctx, {
-    type: "line",
-    data: { labels: horizons.map((h) => `${h}y`), datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: "index", intersect: false },
-      plugins: { legend: { display: false }, tooltip: baseTooltip(fmtPct) },
-      scales: baseScales((v) => fmtPct(v)),
-    },
-  });
+  if (isChartView) {
+    const datasets = assets.map((asset, i) => ({
+      label: displayName(asset),
+      data: table.rows.map((r) => r[asset]),
+      borderColor: colorFor(i),
+      backgroundColor: colorFor(i),
+      borderWidth: 2,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      tension: 0.25,
+      spanGaps: true,
+      hidden: curveState.isolated !== null && curveState.isolated !== asset,
+    }));
 
-  renderLegend("curveLegend", assets, curveState.hidden, renderCurve);
+    const ctx = document.getElementById("curveCanvas").getContext("2d");
+    if (curveChart) curveChart.destroy();
+    curveChart = new Chart(ctx, {
+      type: "line",
+      data: { labels: horizons.map((h) => `${h}y`), datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: { legend: { display: false }, tooltip: baseTooltip(fmtPct) },
+        scales: baseScales((v) => fmtPct(v)),
+      },
+      plugins: [zeroLinePlugin],
+    });
+
+    renderCurveLegend(assets);
+  } else {
+    renderCurveTable(table, assets);
+  }
 }
 
-function renderLegend(containerId, assets, hiddenSet, onToggle) {
-  const el = document.getElementById(containerId);
+function renderCurveLegend(assets) {
+  const el = document.getElementById("curveLegend");
   el.innerHTML = "";
   assets.forEach((asset, i) => {
+    const isolated = curveState.isolated === asset;
+    const dimmed = curveState.isolated !== null && !isolated;
     const item = document.createElement("button");
     item.type = "button";
-    item.className = "legend-item" + (hiddenSet.has(asset) ? " off" : "");
+    item.className = "legend-item" + (dimmed ? " off" : "") + (isolated ? " isolated" : "");
     item.innerHTML = `<span class="legend-swatch" style="background:${colorFor(i)}"></span>${displayName(asset)}`;
     item.addEventListener("click", () => {
-      if (hiddenSet.has(asset)) hiddenSet.delete(asset);
-      else hiddenSet.add(asset);
-      onToggle();
+      curveState.isolated = isolated ? null : asset;
+      renderCurve();
     });
     el.appendChild(item);
   });
 }
 
+function renderCurveTable(table, assets) {
+  const container = document.getElementById("curveTableHolder");
+  let html = '<table class="data-table"><thead><tr><th>Holding period</th>';
+  assets.forEach((a) => (html += `<th>${displayName(a)}</th>`));
+  html += "</tr></thead><tbody>";
+  table.rows.forEach((r) => {
+    html += `<tr><td>${r.Horizon}y</td>`;
+    assets.forEach((a) => (html += `<td>${fmtPct(r[a])}</td>`));
+    html += "</tr>";
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
 /* ===================== CHART 2: PRICE / DIVIDEND LEVELS ==================== */
 /* "Forecasted price or dividends of stock markets"                          */
+
+// Some markets are labelled with a ticker in the price files but with a
+// plain country/region name in the dividend files (e.g. index price file
+// uses "OMXH" for Finland, but the index dividend file uses "Finland").
+// This map lets the selected market survive toggling between the two.
+const INDEX_MARKET_MAP = {
+  Finland: { price: "OMXH", dividend: "Finland" },
+  Germany: { price: "HDAX", dividend: "Germany" },
+  Europe: { price: "Stoxx600", dividend: "Europe" },
+  USA: { price: "Russell3000", dividend: "USA" },
+  France: { price: "CAC", dividend: "France" },
+  UK: { price: "FTSE", dividend: null },
+  NL: { price: "AEX", dividend: "NL" },
+  Sweden: { price: "OMXS", dividend: "Sweden" },
+  World: { price: "World", dividend: null },
+  Italy: { price: null, dividend: "Italy" },
+  Spain: { price: null, dividend: "Spain" },
+};
+
+// Equity files already use plain, matching country/region names in both
+// the price and dividend versions, so the canonical market name doubles
+// as the raw column key directly (identity mapping).
+function rawKeyFor(market, group, series) {
+  if (group === "equity") return market;
+  const entry = INDEX_MARKET_MAP[market];
+  return entry ? entry[series] : null;
+}
+
+function marketFromRawKey(rawKey, group, series) {
+  if (group === "equity") return rawKey;
+  for (const [market, entry] of Object.entries(INDEX_MARKET_MAP)) {
+    if (entry[series] === rawKey) return market;
+  }
+  return rawKey;
+}
 
 const levelState = {
   group: "indices", // 'indices' | 'equity'
   series: "price", // 'price' | 'dividend'
-  asset: null,
+  market: "Finland", // canonical market name, stable across group/series toggles
   from: null,
   to: null,
 };
@@ -295,7 +427,7 @@ async function initLevel() {
   });
 
   document.getElementById("levelAssetSelect").addEventListener("change", (e) => {
-    levelState.asset = e.target.value;
+    levelState.market = marketFromRawKey(e.target.value, levelState.group, levelState.series);
     resetRangeToDefault();
     renderLevel();
   });
@@ -309,13 +441,12 @@ async function initLevel() {
     renderLevel();
   });
 
-  document.querySelectorAll(".range-preset").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.dataset.preset === "forecast") resetRangeToDefault();
-      else if (btn.dataset.preset === "full") setRangeToFull();
-      renderLevel();
-    });
+  document.querySelector('.range-preset[data-preset="forecast"]').addEventListener("click", () => {
+    resetRangeToDefault();
+    renderLevel();
   });
+
+  document.getElementById("levelExpandBtn").addEventListener("click", () => toggleFullscreen("levelVisual"));
 
   refreshAssetDropdown();
   resetRangeToDefault();
@@ -333,7 +464,6 @@ function refreshAssetDropdown() {
   const table = currentLevelTable();
   const assets = dedupedAssetNames(groupByAsset(table.headers));
   const select = document.getElementById("levelAssetSelect");
-  const previous = levelState.asset;
   select.innerHTML = "";
   assets.forEach((asset) => {
     const opt = document.createElement("option");
@@ -341,8 +471,11 @@ function refreshAssetDropdown() {
     opt.textContent = displayName(asset);
     select.appendChild(opt);
   });
-  levelState.asset = assets.includes(previous) ? previous : assets[0];
-  select.value = levelState.asset;
+
+  const desiredRaw = rawKeyFor(levelState.market, levelState.group, levelState.series);
+  const rawKey = assets.includes(desiredRaw) ? desiredRaw : assets[0];
+  select.value = rawKey;
+  levelState.market = marketFromRawKey(rawKey, levelState.group, levelState.series);
 }
 
 // First row where the model has *any* forward-looking figure for this asset.
@@ -352,20 +485,19 @@ function forecastStartIndex(rows, cols) {
   );
 }
 
+function currentCols() {
+  const table = currentLevelTable();
+  const rawKey = rawKeyFor(levelState.market, levelState.group, levelState.series);
+  return groupByAsset(table.headers)[rawKey];
+}
+
 function resetRangeToDefault() {
   const table = currentLevelTable();
-  const cols = groupByAsset(table.headers)[levelState.asset];
+  const cols = currentCols();
   if (!cols) return;
   const startIdx = forecastStartIndex(table.rows, cols);
   const fromRow = startIdx === -1 ? table.rows[0] : table.rows[startIdx];
   levelState.from = fromRow.Date;
-  levelState.to = table.rows[table.rows.length - 1].Date;
-  syncRangeInputs();
-}
-
-function setRangeToFull() {
-  const table = currentLevelTable();
-  levelState.from = table.rows[0].Date;
   levelState.to = table.rows[table.rows.length - 1].Date;
   syncRangeInputs();
 }
@@ -386,7 +518,7 @@ function syncRangeInputs() {
 
 function renderLevel() {
   const table = currentLevelTable();
-  const cols = groupByAsset(table.headers)[levelState.asset];
+  const cols = currentCols();
   if (!cols) return;
 
   const rows = table.rows.filter((r) => r.Date >= levelState.from && r.Date <= levelState.to);
@@ -469,13 +601,11 @@ function renderLevel() {
     },
   });
 
-  // clearly mark which series is showing, and the visible date span
   const badge = document.getElementById("levelBadge");
   badge.textContent = levelState.series === "price" ? "Showing: price index (excl. dividends)" : "Showing: dividend level";
   badge.className = "series-badge " + (levelState.series === "price" ? "badge-price" : "badge-dividend");
 
-  const caption = document.getElementById("levelCaption");
-  caption.innerHTML = `<span>Showing ${fmtDate(levelState.from)} – ${fmtDate(levelState.to)}</span><span>Full data available from ${fmtDate(table.rows[0].Date)} to ${fmtDate(table.rows[table.rows.length - 1].Date)}</span>`;
+  document.getElementById("levelCaption").textContent = `Showing ${fmtDate(levelState.from)} – ${fmtDate(levelState.to)}`;
 }
 
 /* --------------------------------- init ---------------------------------- */

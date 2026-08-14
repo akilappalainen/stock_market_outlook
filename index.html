@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Market Return Outlook — equity &amp; index return model</title>
+<title>Stock Market Outlook — equity &amp; index return model</title>
 <meta name="description" content="Model-based total-return estimates for major equity markets and indices, with historical price and dividend levels." />
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,12 +16,9 @@
 
 <header class="site-header">
   <div class="wrap">
-    <div>
-      <span class="brand-eyebrow">Market return model</span>
-      <p class="brand-title">Return Outlook</p>
-    </div>
+    <p class="brand-title">Stock market outlook</p>
     <nav class="site-nav">
-      <a href="#curve">Return curve</a>
+      <a href="#curve">Total return</a>
       <a href="#levels">Price &amp; dividends</a>
       <a href="#methodology">Methodology</a>
     </nav>
@@ -30,32 +27,16 @@
 
 <main>
 
-  <div class="wrap intro">
-    <p class="intro-text">
-      Annualised total-return estimates and historical price / dividend levels for major
-      indices and national equity markets, produced by a regression-based forecasting model.
-    </p>
-    <div class="disclaimer">
-      <span class="mark">Note —</span>
-      <span>
-        This page presents statistical model output for general information. It is not
-        investment advice or a recommendation to buy, sell or hold any security. Past accuracy
-        does not guarantee future results, and investing involves risk of loss.
-      </span>
-    </div>
-  </div>
-
   <!-- ============================ CHART 1 ============================ -->
   <section id="curve">
     <div class="wrap">
       <div class="panel">
         <div class="panel-head">
           <div>
-            <p class="section-eyebrow">Chart 1 — return by holding period</p>
+            <p class="section-eyebrow">Chart 1 — total return by holding period</p>
             <h2 class="section-title">Forecasted total return curve of stock markets</h2>
             <p class="section-lede">
-              Estimated annualised total return for holding periods of 2 to 10 years, as of the
-              model's latest snapshot. Use the legend to isolate individual markets.
+              Estimated annualised total return for holding periods of 2 to 10 years.
             </p>
           </div>
           <div class="snapshot-chip">
@@ -72,15 +53,32 @@
               <button data-value="equity">Equities by country</button>
             </div>
           </div>
+
+          <div class="control-group">
+            <span class="control-label">View</span>
+            <div class="segmented" id="curveViewToggle">
+              <button data-value="chart" class="active">Chart</button>
+              <button data-value="table">Table</button>
+            </div>
+          </div>
         </div>
 
-        <div class="chart-holder">
-          <canvas id="curveCanvas"></canvas>
-        </div>
-        <div class="legend" id="curveLegend"></div>
+        <div class="visual-wrap expandable" id="curveVisual">
+          <button class="expand-btn" id="curveExpandBtn" aria-label="Expand to fullscreen">⤢</button>
 
-        <div class="chart-caption">
-          <span>X-axis: holding period in years from today. Y-axis: estimated annualised total return.</span>
+          <div class="chart-holder" id="curveChartHolder">
+            <canvas id="curveCanvas"></canvas>
+          </div>
+          <div class="table-holder" id="curveTableHolder" style="display:none"></div>
+
+          <div id="curveLegendWrap">
+            <p class="legend-hint">Click a market to isolate it — click again to show all.</p>
+            <div class="legend" id="curveLegend"></div>
+          </div>
+
+          <div class="chart-caption" id="curveCaption">
+            <span>X-axis: holding period in years from today. Y-axis: estimated annualised total return. The horizontal line marks 0%.</span>
+          </div>
         </div>
       </div>
     </div>
@@ -92,14 +90,8 @@
       <div class="panel">
         <div class="panel-head">
           <div>
-            <p class="section-eyebrow">Chart 2 — price and dividend history</p>
+            <p class="section-eyebrow">Chart 2 — price and dividend history and forecast</p>
             <h2 class="section-title">Forecasted price or dividends of stock markets</h2>
-            <p class="section-lede">
-              For one market at a time: the model's forecast next to what actually happened,
-              shown either as the price index level or the dividend level — never as a rate of
-              change. The chart opens where the model's forecast range begins; widen it with the
-              date pickers or the "Full history" shortcut.
-            </p>
           </div>
           <span class="series-badge" id="levelBadge">Showing: price index</span>
         </div>
@@ -137,19 +129,22 @@
             <input type="date" id="rangeTo" />
           </div>
           <div class="control-group">
-            <span class="control-label">Shortcuts</span>
+            <span class="control-label">Shortcut</span>
             <div class="preset-row">
               <button class="range-preset" data-preset="forecast">Since forecast begins</button>
-              <button class="range-preset" data-preset="full">Full history</button>
             </div>
           </div>
         </div>
 
-        <div class="chart-holder tall">
-          <canvas id="levelCanvas"></canvas>
-        </div>
+        <div class="visual-wrap expandable" id="levelVisual">
+          <button class="expand-btn" id="levelExpandBtn" aria-label="Expand to fullscreen">⤢</button>
 
-        <div class="chart-caption" id="levelCaption"></div>
+          <div class="chart-holder tall">
+            <canvas id="levelCanvas"></canvas>
+          </div>
+
+          <div class="chart-caption" id="levelCaption"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -160,10 +155,13 @@
       <p class="section-eyebrow">Methodology</p>
       <h2 class="section-title">What am I looking at?</h2>
       <p class="section-lede" style="max-width:760px">
-        Chart 1 shows what the model currently expects for annualised total return at each
-        holding period. Chart 2 puts that same model's price or dividend forecast next to what a
-        market actually delivered historically, so the current forecast can be judged in context
-        — it is not a guarantee that the pattern will repeat.
+        Chart 1 shows forecasted annualised total return (price change + dividend growth) at
+        holding periods of 2–10 years per stock market. Chart 2 shows historical and forecasted
+        price and dividend levels of stock markets. Underlying data comes from public market
+        sources. Forecasted returns and price and dividend levels are produced by a
+        regression-based forecasting model. Forecasts are empirically and in-sample most accurate
+        for 10-year periods and least accurate for 2-year periods. Both data and forecasts are
+        updated at the start of each month.
       </p>
     </div>
   </section>
@@ -171,23 +169,11 @@
 </main>
 
 <footer>
-  <div class="wrap">
-    <div class="foot-grid">
-      <div>
-        <h3>About</h3>
-        <p style="margin:0">Add a short line here about who produces this model and how often it's refreshed.</p>
-      </div>
-      <div>
-        <h3>Data &amp; methodology</h3>
-        <p style="margin:0">Underlying data comes from public market sources; the return, price and dividend estimates shown here are produced by a mathematical forecasting model.</p>
-      </div>
-    </div>
-    <div class="fine">
-      This site presents statistical model output for general information purposes only. It is not
-      investment, legal or tax advice, and nothing here should be relied upon as a recommendation
-      to buy, sell or hold any financial instrument. Investing involves risk, including loss of
-      capital.
-    </div>
+  <div class="wrap fine">
+    This site presents statistical model output for general information purposes only. It is not
+    investment, legal or tax advice, and nothing here should be relied upon as a recommendation
+    to buy, sell or hold any financial instrument. Investing involves risk, including loss of
+    capital.
   </div>
 </footer>
 
