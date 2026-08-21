@@ -193,18 +193,6 @@ select {
   min-width: 190px;
 }
 
-/* date-range controls */
-input[type="date"] {
-  font-family: var(--mono);
-  font-size: 13px;
-  padding: 6px 9px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
-  background: var(--paper-raised);
-  color: var(--ink);
-  min-width: 150px;
-}
-
 .range-row { margin-bottom: 26px; }
 
 .preset-row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -220,6 +208,7 @@ input[type="date"] {
   cursor: pointer;
 }
 .range-preset:hover { border-color: var(--slate); color: var(--ink); }
+.range-preset.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 
 /* panel header: title block + chip/badge, wraps on narrow screens */
 .panel-head {
@@ -413,7 +402,7 @@ footer .fine {
   .wrap { padding: 0 16px; }
   .controls-row { align-items: stretch; gap: 16px; }
   .control-group { width: 100%; }
-  select, input[type="date"] { min-width: 0; width: 100%; }
+  select { min-width: 0; width: 100%; }
   .segmented { width: 100%; }
   .segmented button { flex: 1; text-align: center; padding: 9px 10px; }
   .preset-row { width: 100%; }

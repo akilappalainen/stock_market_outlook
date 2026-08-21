@@ -192,6 +192,40 @@ const zeroLinePlugin = {
   },
 };
 
+// Same idea, but for a horizontal bar chart where the value axis is x.
+const zeroLineXPlugin = {
+  id: "zeroLineX",
+  afterDraw(chart) {
+    const { ctx, chartArea, scales } = chart;
+    const x = scales.x;
+    if (!x) return;
+    const xZero = x.getPixelForValue(0);
+    if (xZero < chartArea.left || xZero > chartArea.right) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(xZero, chartArea.top);
+    ctx.lineTo(xZero, chartArea.bottom);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#2b3540";
+    ctx.stroke();
+    ctx.restore();
+  },
+};
+
+function baseTooltipX(valueFormatter) {
+  return {
+    backgroundColor: "#10151c",
+    titleFont: { family: FONT_MONO, size: 11.5 },
+    bodyFont: { family: FONT_SANS, size: 12.5 },
+    padding: 10,
+    cornerRadius: 6,
+    displayColors: true,
+    callbacks: {
+      label: (ctx) => ` ${valueFormatter(ctx.parsed.x)}`,
+    },
+  };
+}
+
 function wireSegmented(containerId, onChange) {
   const buttons = document.querySelectorAll(`#${containerId} button`);
   buttons.forEach((btn) => {
@@ -248,7 +282,7 @@ document.addEventListener("keydown", (e) => {
 /* ========================= CHART 1: RETURN CURVE ========================== */
 /* "Forecasted total return curve of stock markets"                          */
 
-const curveState = { group: "indices", isolated: null, view: "chart" };
+const curveState = { group: "indices", isolated: null, view: "chart", rankingHorizon: 6 };
 let curveChart = null;
 let curveData = { indices: null, equity: null };
 
@@ -268,6 +302,11 @@ async function initCurve() {
     renderCurve();
   });
 
+  document.getElementById("curveRankingHorizonSelect").addEventListener("change", (e) => {
+    curveState.rankingHorizon = parseInt(e.target.value, 10);
+    renderCurve();
+  });
+
   document.getElementById("curveExpandBtn").addEventListener("click", () => toggleFullscreen("curveVisual"));
 
   renderCurve();
@@ -276,50 +315,115 @@ async function initCurve() {
 function renderCurve() {
   const table = curveState.group === "indices" ? curveData.indices : curveData.equity;
   const assets = table.headers.filter((h) => h !== "Horizon" && h !== "Date");
-  const horizons = table.rows.map((r) => r.Horizon);
   const snapshotDate = table.rows[0] ? table.rows[0].Date : null;
 
   document.getElementById("curveSnapshotDate").textContent = fmtDate(snapshotDate);
 
-  const isChartView = curveState.view === "chart";
-  document.getElementById("curveChartHolder").style.display = isChartView ? "" : "none";
-  document.getElementById("curveLegendWrap").style.display = isChartView ? "" : "none";
-  document.getElementById("curveCaption").style.display = isChartView ? "" : "none";
-  document.getElementById("curveTableHolder").style.display = isChartView ? "none" : "";
+  const isChart = curveState.view === "chart";
+  const isRanking = curveState.view === "ranking";
+  const isTable = curveState.view === "table";
 
-  if (isChartView) {
-    const datasets = assets.map((asset, i) => ({
-      label: displayName(asset),
-      data: table.rows.map((r) => r[asset]),
-      borderColor: colorFor(i),
-      backgroundColor: colorFor(i),
-      borderWidth: 2,
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      tension: 0.25,
-      spanGaps: true,
-      hidden: curveState.isolated !== null && curveState.isolated !== asset,
-    }));
+  document.getElementById("curveChartHolder").style.display = isTable ? "none" : "";
+  document.getElementById("curveLegendWrap").style.display = isChart ? "" : "none";
+  document.getElementById("curveCaption").style.display = isTable ? "none" : "";
+  document.getElementById("curveTableHolder").style.display = isTable ? "" : "none";
+  document.getElementById("curveHorizonWrap").style.display = isRanking ? "" : "none";
 
-    const ctx = document.getElementById("curveCanvas").getContext("2d");
-    if (curveChart) curveChart.destroy();
-    curveChart = new Chart(ctx, {
-      type: "line",
-      data: { labels: horizons.map((h) => `${h}y`), datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: { legend: { display: false }, tooltip: baseTooltip(fmtPct) },
-        scales: baseScales((v) => fmtPct(v)),
-      },
-      plugins: [zeroLinePlugin],
-    });
-
-    renderCurveLegend(assets);
-  } else {
+  if (isTable) {
     renderCurveTable(table, assets);
+    return;
   }
+
+  if (isChart) {
+    renderCurveChart(table, assets);
+  } else {
+    renderCurveRanking(table, assets);
+  }
+}
+
+function renderCurveChart(table, assets) {
+  const horizons = table.rows.map((r) => r.Horizon);
+  const datasets = assets.map((asset, i) => ({
+    label: displayName(asset),
+    data: table.rows.map((r) => r[asset]),
+    borderColor: colorFor(i),
+    backgroundColor: colorFor(i),
+    borderWidth: 2,
+    pointRadius: 3,
+    pointHoverRadius: 5,
+    tension: 0.25,
+    spanGaps: true,
+    hidden: curveState.isolated !== null && curveState.isolated !== asset,
+  }));
+
+  const ctx = document.getElementById("curveCanvas").getContext("2d");
+  if (curveChart) curveChart.destroy();
+  curveChart = new Chart(ctx, {
+    type: "line",
+    data: { labels: horizons.map((h) => `${h}y`), datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { display: false }, tooltip: baseTooltip(fmtPct) },
+      scales: baseScales((v) => fmtPct(v)),
+    },
+    plugins: [zeroLinePlugin],
+  });
+
+  renderCurveLegend(assets);
+  document.getElementById("curveCaptionText").textContent =
+    "X-axis: holding period in years from today. Y-axis: estimated annualised total return. The horizontal line marks 0%.";
+}
+
+function renderCurveRanking(table, assets) {
+  const horizon = curveState.rankingHorizon;
+  const row = table.rows.find((r) => r.Horizon === horizon);
+  const entries = assets
+    .map((asset, i) => ({ asset, value: row ? row[asset] : null, color: colorFor(i) }))
+    .filter((e) => e.value !== null && e.value !== undefined && !isNaN(e.value))
+    .sort((a, b) => b.value - a.value);
+
+  const ctx = document.getElementById("curveCanvas").getContext("2d");
+  if (curveChart) curveChart.destroy();
+  curveChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: entries.map((e) => displayName(e.asset)),
+      datasets: [
+        {
+          label: `Total return (${horizon}y)`,
+          data: entries.map((e) => e.value),
+          backgroundColor: entries.map((e) => e.color),
+          borderRadius: 4,
+          barPercentage: 0.7,
+          categoryPercentage: 0.7,
+        },
+      ],
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: baseTooltipX(fmtPct) },
+      scales: {
+        x: {
+          grid: { color: GRID_COLOR, drawTicks: false },
+          ticks: { color: AXIS_COLOR, font: { family: FONT_MONO, size: 11 }, callback: (v) => fmtPct(v) },
+          border: { color: GRID_COLOR },
+        },
+        y: {
+          grid: { display: false },
+          ticks: { color: AXIS_COLOR, font: { family: FONT_SANS, size: 12.5 } },
+          border: { display: false },
+        },
+      },
+    },
+    plugins: [zeroLineXPlugin],
+  });
+
+  document.getElementById("curveCaptionText").textContent =
+    `Y-axis: market. X-axis: estimated annualised total return at a ${horizon}-year holding period. The vertical line marks 0%.`;
 }
 
 function renderCurveLegend(assets) {
@@ -398,6 +502,7 @@ const levelState = {
   market: "Finland", // canonical market name, stable across group/series toggles
   from: null,
   to: null,
+  activePreset: "max",
 };
 
 let levelTables = { priceIndex: null, priceEquity: null, dividendIndex: null, dividendEquity: null };
@@ -415,42 +520,28 @@ async function initLevel() {
   wireSegmented("levelGroupToggle", (val) => {
     levelState.group = val;
     refreshAssetDropdown();
-    resetRangeToDefault();
-    renderLevel();
+    applyLevelPreset("max");
   });
 
   wireSegmented("levelSeriesToggle", (val) => {
     levelState.series = val;
     refreshAssetDropdown();
-    resetRangeToDefault();
-    renderLevel();
+    applyLevelPreset("max");
   });
 
   document.getElementById("levelAssetSelect").addEventListener("change", (e) => {
     levelState.market = marketFromRawKey(e.target.value, levelState.group, levelState.series);
-    resetRangeToDefault();
-    renderLevel();
+    applyLevelPreset("max");
   });
 
-  document.getElementById("rangeFrom").addEventListener("change", (e) => {
-    levelState.from = e.target.value;
-    renderLevel();
-  });
-  document.getElementById("rangeTo").addEventListener("change", (e) => {
-    levelState.to = e.target.value;
-    renderLevel();
-  });
-
-  document.querySelector('.range-preset[data-preset="forecast"]').addEventListener("click", () => {
-    resetRangeToDefault();
-    renderLevel();
+  document.querySelectorAll(".range-preset").forEach((btn) => {
+    btn.addEventListener("click", () => applyLevelPreset(btn.dataset.preset));
   });
 
   document.getElementById("levelExpandBtn").addEventListener("click", () => toggleFullscreen("levelVisual"));
 
   refreshAssetDropdown();
-  resetRangeToDefault();
-  renderLevel();
+  applyLevelPreset("max");
 }
 
 function currentLevelTable() {
@@ -491,6 +582,21 @@ function currentCols() {
   return groupByAsset(table.headers)[rawKey];
 }
 
+// Last row that has an actual realised value (as opposed to a future,
+// forecast-only row) — the anchor point the 1Y/5Y/10Y shortcuts count back from.
+function latestRealizedDate(rows, cols) {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i][cols.realized_value] !== null) return rows[i].Date;
+  }
+  return rows[rows.length - 1].Date;
+}
+
+function shiftDateByYears(iso, yearsBack) {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCFullYear(d.getUTCFullYear() - yearsBack);
+  return d.toISOString().slice(0, 10);
+}
+
 function resetRangeToDefault() {
   const table = currentLevelTable();
   const cols = currentCols();
@@ -499,21 +605,34 @@ function resetRangeToDefault() {
   const fromRow = startIdx === -1 ? table.rows[0] : table.rows[startIdx];
   levelState.from = fromRow.Date;
   levelState.to = table.rows[table.rows.length - 1].Date;
-  syncRangeInputs();
 }
 
-function syncRangeInputs() {
+function setActivePresetButtons(preset) {
+  document.querySelectorAll(".range-preset").forEach((b) => b.classList.toggle("active", b.dataset.preset === preset));
+}
+
+// "max" restores the model's full forecast range (same as before); "1y"/"5y"/"10y"
+// zoom to that many years of history before the latest realised data point, while
+// still showing the full forecast horizon out to the right.
+function applyLevelPreset(preset) {
   const table = currentLevelTable();
-  const min = table.rows[0].Date;
-  const max = table.rows[table.rows.length - 1].Date;
-  const fromInput = document.getElementById("rangeFrom");
-  const toInput = document.getElementById("rangeTo");
-  fromInput.min = min;
-  fromInput.max = max;
-  toInput.min = min;
-  toInput.max = max;
-  fromInput.value = levelState.from;
-  toInput.value = levelState.to;
+  const cols = currentCols();
+  if (!cols) return;
+
+  if (preset === "max") {
+    resetRangeToDefault();
+  } else {
+    const years = { "1y": 1, "5y": 5, "10y": 10 }[preset];
+    const latestReal = latestRealizedDate(table.rows, cols);
+    let from = shiftDateByYears(latestReal, years);
+    if (from < table.rows[0].Date) from = table.rows[0].Date;
+    levelState.from = from;
+    levelState.to = table.rows[table.rows.length - 1].Date;
+  }
+
+  levelState.activePreset = preset;
+  setActivePresetButtons(preset);
+  renderLevel();
 }
 
 function renderLevel() {

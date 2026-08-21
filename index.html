@@ -5,12 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Stock Market Outlook — equity &amp; index return model</title>
 <meta name="description" content="Model-based total-return estimates for major equity markets and indices, with historical price and dividend levels." />
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="style.css?v=5" />
 </head>
 <body>
 
@@ -34,7 +35,7 @@
         <div class="panel-head">
           <div>
             <p class="section-eyebrow">Chart 1 — total return by holding period</p>
-            <h2 class="section-title">Forecasted total return curve of stock markets</h2>
+            <h2 class="section-title">Forecasted total return of stock markets</h2>
             <p class="section-lede">
               Estimated annualised total return for holding periods of 2 to 10 years.
             </p>
@@ -49,17 +50,33 @@
           <div class="control-group">
             <span class="control-label">Market group</span>
             <div class="segmented" id="curveGroupToggle">
-              <button data-value="indices" class="active">Indices</button>
-              <button data-value="equity">Equities by country</button>
+              <button data-value="indices" class="active">Index</button>
+              <button data-value="equity">Total equity</button>
             </div>
           </div>
 
           <div class="control-group">
             <span class="control-label">View</span>
             <div class="segmented" id="curveViewToggle">
-              <button data-value="chart" class="active">Chart</button>
+              <button data-value="ranking">Ranking</button>
+              <button data-value="chart" class="active">Return curve</button>
               <button data-value="table">Table</button>
             </div>
+          </div>
+
+          <div class="control-group" id="curveHorizonWrap" style="display:none">
+            <span class="control-label">Holding period</span>
+            <select id="curveRankingHorizonSelect">
+              <option value="2">2y</option>
+              <option value="3">3y</option>
+              <option value="4">4y</option>
+              <option value="5">5y</option>
+              <option value="6" selected>6y</option>
+              <option value="7">7y</option>
+              <option value="8">8y</option>
+              <option value="9">9y</option>
+              <option value="10">10y</option>
+            </select>
           </div>
         </div>
 
@@ -77,7 +94,7 @@
           </div>
 
           <div class="chart-caption" id="curveCaption">
-            <span>X-axis: holding period in years from today. Y-axis: estimated annualised total return. The horizontal line marks 0%.</span>
+            <span id="curveCaptionText">X-axis: holding period in years from today. Y-axis: estimated annualised total return. The horizontal line marks 0%.</span>
           </div>
         </div>
       </div>
@@ -98,14 +115,6 @@
 
         <div class="controls-row">
           <div class="control-group">
-            <span class="control-label">Market group</span>
-            <div class="segmented" id="levelGroupToggle">
-              <button data-value="indices" class="active">Indices</button>
-              <button data-value="equity">Equities by country</button>
-            </div>
-          </div>
-
-          <div class="control-group">
             <span class="control-label">Market</span>
             <select id="levelAssetSelect"></select>
           </div>
@@ -113,25 +122,28 @@
           <div class="control-group">
             <span class="control-label">Series</span>
             <div class="segmented" id="levelSeriesToggle">
-              <button data-value="price" class="active">Price index</button>
+              <button data-value="price" class="active">Price</button>
               <button data-value="dividend">Dividends</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <span class="control-label">Market group</span>
+            <div class="segmented" id="levelGroupToggle">
+              <button data-value="indices" class="active">Index</button>
+              <button data-value="equity">Total equity</button>
             </div>
           </div>
         </div>
 
         <div class="controls-row range-row">
           <div class="control-group">
-            <span class="control-label">From</span>
-            <input type="date" id="rangeFrom" />
-          </div>
-          <div class="control-group">
-            <span class="control-label">To</span>
-            <input type="date" id="rangeTo" />
-          </div>
-          <div class="control-group">
             <span class="control-label">Shortcut</span>
             <div class="preset-row">
-              <button class="range-preset" data-preset="forecast">Since forecast begins</button>
+              <button class="range-preset" data-preset="1y">1Y</button>
+              <button class="range-preset" data-preset="5y">5Y</button>
+              <button class="range-preset" data-preset="10y">10Y</button>
+              <button class="range-preset active" data-preset="max">Max</button>
             </div>
           </div>
         </div>
@@ -155,12 +167,12 @@
       <p class="section-eyebrow">Methodology</p>
       <h2 class="section-title">What am I looking at?</h2>
       <p class="section-lede" style="max-width:760px">
-        Chart 1 shows forecasted annualised total return (price change + dividend growth) at
-        holding periods of 2–10 years per stock market. Chart 2 shows historical and forecasted
-        price and dividend levels of stock markets. Underlying data comes from public market
-        sources. Forecasted returns and price and dividend levels are produced by a
-        regression-based forecasting model. Forecasts are empirically and in-sample most accurate
-        for 10-year periods and least accurate for 2-year periods. Both data and forecasts are
+        Chart 1 shows forecasted annualised total return (price change + dividend yield *
+        cumulative dividend growth) at holding periods of 2–10 years per stock market. Chart 2
+        shows historical and forecasted price and dividend levels of stock markets. Underlying
+        data comes from public market sources. Forecasted returns and price and dividend levels
+        are produced by a regression-based forecasting model. Forecasts are empirically most
+        accurate for long holding periods and least accurate for short periods. Forecasts are
         updated at the start of each month.
       </p>
     </div>
@@ -178,6 +190,6 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
