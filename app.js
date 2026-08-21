@@ -4,15 +4,28 @@
    This file reads the plain-text data files in /data at runtime (no build
    step). To publish new numbers, replace a file in /data with a new export
    in the exact same column layout and the site picks it up automatically.
+
+   File names are tried as a list of candidates, in order, because the
+   underlying export has been seen with either spaces or underscores (and
+   with "index" or "indices") in the file name — whichever one actually
+   exists in /data is used, so this keeps working either way.
    ========================================================================== */
 
 const FILES = {
-  summaryIndices: "data/Estimated_annualized_total_return_of_indices.txt",
-  summaryEquity: "data/Estimated_annualized_total_return_of_equity.txt",
-  priceIndex: "data/FData.txt",
-  priceEquity: "data/FData_Equity.txt",
-  dividendIndex: "data/FData_Index_Dividend.txt",
-  dividendEquity: "data/FData_DIC_Dividend.txt",
+  summaryIndices: [
+    "data/Estimated annualized total return of index.txt",
+    "data/Estimated annualized total return of indices.txt",
+    "data/Estimated_annualized_total_return_of_index.txt",
+    "data/Estimated_annualized_total_return_of_indices.txt",
+  ],
+  summaryEquity: [
+    "data/Estimated annualized total return of equity.txt",
+    "data/Estimated_annualized_total_return_of_equity.txt",
+  ],
+  priceIndex: ["data/FData.txt"],
+  priceEquity: ["data/FData Equity.txt", "data/FData_Equity.txt"],
+  dividendIndex: ["data/FData Index Dividend.txt", "data/FData_Index_Dividend.txt"],
+  dividendEquity: ["data/FData DIC Dividend.txt", "data/FData_DIC_Dividend.txt"],
 };
 
 // Friendly display names for asset codes that are abbreviations.
@@ -33,6 +46,12 @@ const DISPLAY_NAMES = {
 function displayName(code) {
   return DISPLAY_NAMES[code] || code;
 }
+
+// One value per page load. Appended to every data-file fetch so browsers
+// and CDNs (e.g. the one in front of GitHub Pages) can't serve a stale
+// cached copy of a .txt file after it's been updated — data changes every
+// month, so it must always be fetched fresh rather than cached long-term.
+const CACHE_BUST = Date.now();
 
 // A muted, distinguishable categorical palette (not neon, reads on paper bg).
 const PALETTE = [
@@ -111,11 +130,23 @@ function dedupedAssetNames(assets) {
   return Object.keys(assets).filter((k) => !/\.\d+$/.test(k));
 }
 
-async function loadTable(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Could not load ${url} (${res.status})`);
-  const text = await res.text();
-  return parseTable(text);
+async function loadTable(candidates) {
+  const list = Array.isArray(candidates) ? candidates : [candidates];
+  let lastErr;
+  for (const path of list) {
+    const url = `${encodeURI(path)}?t=${CACHE_BUST}`;
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.ok) {
+        const text = await res.text();
+        return parseTable(text);
+      }
+      lastErr = new Error(`Could not load ${path} (${res.status})`);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error(`Could not load any of: ${list.join(", ")}`);
 }
 
 /* ------------------------------ formatting ------------------------------- */
